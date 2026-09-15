@@ -94,6 +94,14 @@ model Promotion {
   rulesIntro       String?         @db.Text
   /// Notes/règles complémentaires libres, affichées en fin de règlement.
   rulesCustomNotes String?         @db.Text
+  /// Snapshot figé du graphique comparatif à la clôture — { points, participantNames,
+  /// participantAvatars }, même forme que les props de PromotionPerformanceChart
+  /// (initialCapital déjà porté par ce modèle). Écrit une seule fois par
+  /// finalizePromotionClosure (src/lib/promotion-lifecycle.ts), jamais modifié ensuite :
+  /// lecture totalement indépendante de PerformanceSnapshot / des prix / des concours actifs.
+  /// Nul tant que non clôturée, ou clôturée avant l'introduction de ce champ (voir
+  /// scripts/backfill-final-chart-snapshot.ts pour le rattrapage).
+  finalChartSnapshot Json?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
