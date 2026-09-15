@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { Prisma } from "@/generated/prisma/client";
 import { PromotionStatus, ChangeSessionStatus } from "@/generated/prisma/enums";
 
 const dbMock = {
@@ -277,12 +278,12 @@ describe("finalizePromotionClosure", () => {
 });
 
 describe("finalizePromotionClosure — snapshot final du graphique", () => {
-  it("écrit finalChartSnapshot une seule fois (garde finalChartSnapshot: null)", async () => {
+  it("écrit finalChartSnapshot une seule fois (garde finalChartSnapshot: Prisma.DbNull)", async () => {
     await finalizePromotionClosure("promo-1");
 
     expect(getPromotionPerformanceSeriesMock).toHaveBeenCalledWith("promo-1");
     expect(dbMock.promotion.updateMany).toHaveBeenCalledWith({
-      where: { id: "promo-1", finalChartSnapshot: null },
+      where: { id: "promo-1", finalChartSnapshot: { equals: Prisma.DbNull } },
       data: {
         finalChartSnapshot: {
           points: [

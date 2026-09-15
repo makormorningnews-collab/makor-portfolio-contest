@@ -1,10 +1,14 @@
 import "server-only";
 import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
+import { Prisma } from "@/generated/prisma/client";
 import { PromotionStatus, ChangeSessionStatus } from "@/generated/prisma/enums";
 import { getLeaderboard } from "@/lib/gamification/get-leaderboard";
 import { awardCloseOnlyBadges } from "@/lib/gamification/award-close-only-badges";
-import { getPromotionPerformanceSeries } from "@/lib/gamification/get-promotion-performance-series";
+import {
+  getPromotionPerformanceSeries,
+  type PromotionPerformancePoint,
+} from "@/lib/gamification/get-promotion-performance-series";
 
 /**
  * Clôt une promotion si sa date+heure de fin est atteinte. Idempotent et
@@ -124,15 +128,23 @@ export async function finalizePromotionClosure(promotionId: string): Promise<voi
   const participantAvatars: Record<string, string | null> = Object.fromEntries(
     performanceSeries.participantNames.map((name) => [name, avatarByName.get(name) ?? null]),
   );
+  // Typé explicitement avant conversion en InputJsonValue : Prisma exige un cast via
+  // `unknown` ici (limitation TS connue — une interface littérale n'est jamais
+  // "comparable" à un type avec signature d'index sans le détour), mais l'assignation
+  // à `snapshot` ci-dessous type-checke ce qu'on écrit réellement (une faute de frappe
+  // sur un nom de champ serait détectée ici).
+  const snapshot: {
+    points: PromotionPerformancePoint[];
+    participantNames: string[];
+    participantAvatars: Record<string, string | null>;
+  } = {
+    points: performanceSeries.points,
+    participantNames: performanceSeries.participantNames,
+    participantAvatars,
+  };
   await db.promotion.updateMany({
-    where: { id: promotionId, finalChartSnapshot: null as any },
-    data: {
-      finalChartSnapshot: {
-        points: performanceSeries.points,
-        participantNames: performanceSeries.participantNames,
-        participantAvatars,
-      } as any,
-    },
+    where: { id: promotionId, finalChartSnapshot: { equals: Prisma.DbNull } },
+    data: { finalChartSnapshot: snapshot as unknown as Prisma.InputJsonValue },
   });
 
   // Invalidation best-effort du classement live (le Hall of Fame n'est plus
