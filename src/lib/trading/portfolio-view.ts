@@ -86,8 +86,6 @@ export async function getPortfolioView(userId: string): Promise<PortfolioView | 
 
   if (!portfolio || !promotion) return null;
 
-  const initialCapital = Number(promotion.initialCapital);
-
   // Concours clôturé : tout est figé à `endDate` (dernier cours ≤ endDate, aucun
   // appel fournisseur). Sinon : valorisation partagée de la promotion — la MÊME
   // source que le classement (get-leaderboard.ts) et les statistiques, donc le
@@ -99,6 +97,12 @@ export async function getPortfolioView(userId: string): Promise<PortfolioView | 
     ? await getPromotionValuation(promotion.id, promotion.endDate, { frozen: true })
     : await getCachedPromotionValuation(promotion.id);
   const valued = valuation.byPortfolio[portfolio.id];
+
+  // Lu depuis la valorisation partagée, pas re-dérivé de `promotion.initialCapital` : même si
+  // les deux lignes DB sont identiques en pratique, passer par `valuation` garantit qu'un seul
+  // calcul fait foi pour "Valeur" ET "Gain %" — dashboard et classement ne peuvent structurellement
+  // plus diverger, même dans l'hypothèse (déjà improbable) d'une correction admin concurrente.
+  const initialCapital = valuation.initialCapital;
 
   const valuedPositions = valued?.positions ?? [];
   const availableCash = valued?.availableCash ?? (await computeAvailableCash(portfolio.id, initialCapital));
