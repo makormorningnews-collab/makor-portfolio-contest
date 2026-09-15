@@ -1,7 +1,13 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
-import { getRefreshTier, MORNING_INTERVAL_MS, AFTERNOON_INTERVAL_MS, NIGHT_REVALIDATE_MS } from "@/lib/refresh-schedule";
+import {
+  getRefreshTier,
+  MORNING_INTERVAL_MS,
+  GOLDEN_INTERVAL_MS,
+  EVENING_INTERVAL_MS,
+  NIGHT_REVALIDATE_MS,
+} from "@/lib/refresh-schedule";
 
 export interface ParticipantSnapshotMetrics {
   totalValue: number;
@@ -66,16 +72,21 @@ export async function getPromotionPerformanceSeries(promotionId: string): Promis
 }
 
 /** Variante mise en cache — voir {@link getCachedLeaderboard} pour le raisonnement (même page,
- * même problème, même pattern à trois variantes matin/après-midi/nuit selon l'heure). */
+ * même problème, même pattern à quatre variantes matin/golden/soir/nuit selon l'heure). */
 const getCachedPromotionPerformanceSeriesMorning = unstable_cache(
   (promotionId: string) => getPromotionPerformanceSeries(promotionId),
   ["promotion-performance-series", "morning"],
   { revalidate: MORNING_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
 );
-const getCachedPromotionPerformanceSeriesAfternoon = unstable_cache(
+const getCachedPromotionPerformanceSeriesGolden = unstable_cache(
   (promotionId: string) => getPromotionPerformanceSeries(promotionId),
-  ["promotion-performance-series", "afternoon"],
-  { revalidate: AFTERNOON_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
+  ["promotion-performance-series", "golden"],
+  { revalidate: GOLDEN_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
+);
+const getCachedPromotionPerformanceSeriesEvening = unstable_cache(
+  (promotionId: string) => getPromotionPerformanceSeries(promotionId),
+  ["promotion-performance-series", "evening"],
+  { revalidate: EVENING_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
 );
 const getCachedPromotionPerformanceSeriesNight = unstable_cache(
   (promotionId: string) => getPromotionPerformanceSeries(promotionId),
@@ -84,7 +95,8 @@ const getCachedPromotionPerformanceSeriesNight = unstable_cache(
 );
 export function getCachedPromotionPerformanceSeries(promotionId: string): Promise<PromotionPerformanceSeries> {
   const tier = getRefreshTier();
-  if (tier === "afternoon") return getCachedPromotionPerformanceSeriesAfternoon(promotionId);
+  if (tier === "golden") return getCachedPromotionPerformanceSeriesGolden(promotionId);
+  if (tier === "evening") return getCachedPromotionPerformanceSeriesEvening(promotionId);
   if (tier === "morning") return getCachedPromotionPerformanceSeriesMorning(promotionId);
   return getCachedPromotionPerformanceSeriesNight(promotionId);
 }

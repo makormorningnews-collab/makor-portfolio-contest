@@ -1,7 +1,13 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
-import { getRefreshTier, MORNING_INTERVAL_MS, AFTERNOON_INTERVAL_MS, NIGHT_REVALIDATE_MS } from "@/lib/refresh-schedule";
+import {
+  getRefreshTier,
+  MORNING_INTERVAL_MS,
+  GOLDEN_INTERVAL_MS,
+  EVENING_INTERVAL_MS,
+  NIGHT_REVALIDATE_MS,
+} from "@/lib/refresh-schedule";
 import {
   getCachedPromotionValuation,
   getPromotionValuation,
@@ -161,10 +167,10 @@ export async function getLeaderboard(
  * donc même un utilisateur qui spam le rafraîchissement ne génère plus
  * qu'une requête réelle par fenêtre, peu importe le nombre de rechargements.
  *
- * Trois variantes (matin/après-midi/nuit, voir refresh-schedule.ts) plutôt
+ * Quatre variantes (matin/golden/soir/nuit, voir refresh-schedule.ts) plutôt
  * qu'une seule : `revalidate` est figé à la définition d'`unstable_cache`,
  * impossible à calculer dynamiquement à l'appel — `getCachedLeaderboard`
- * choisit entre les trois selon l'heure. Même tag sur les trois :
+ * choisit entre les quatre selon l'heure. Même tag sur les quatre :
  * `updateTag("leaderboard")` (voir profil/actions.ts) invalide la variante
  * active quelle qu'elle soit.
  */
@@ -173,10 +179,15 @@ const getCachedLeaderboardMorning = unstable_cache(
   ["leaderboard", "morning"],
   { revalidate: MORNING_INTERVAL_MS / 1000, tags: ["leaderboard"] },
 );
-const getCachedLeaderboardAfternoon = unstable_cache(
+const getCachedLeaderboardGolden = unstable_cache(
   (promotionId: string) => getLeaderboard(promotionId),
-  ["leaderboard", "afternoon"],
-  { revalidate: AFTERNOON_INTERVAL_MS / 1000, tags: ["leaderboard"] },
+  ["leaderboard", "golden"],
+  { revalidate: GOLDEN_INTERVAL_MS / 1000, tags: ["leaderboard"] },
+);
+const getCachedLeaderboardEvening = unstable_cache(
+  (promotionId: string) => getLeaderboard(promotionId),
+  ["leaderboard", "evening"],
+  { revalidate: EVENING_INTERVAL_MS / 1000, tags: ["leaderboard"] },
 );
 const getCachedLeaderboardNight = unstable_cache(
   (promotionId: string) => getLeaderboard(promotionId),
@@ -185,7 +196,8 @@ const getCachedLeaderboardNight = unstable_cache(
 );
 export function getCachedLeaderboard(promotionId: string): Promise<LeaderboardRow[]> {
   const tier = getRefreshTier();
-  if (tier === "afternoon") return getCachedLeaderboardAfternoon(promotionId);
+  if (tier === "golden") return getCachedLeaderboardGolden(promotionId);
+  if (tier === "evening") return getCachedLeaderboardEvening(promotionId);
   if (tier === "morning") return getCachedLeaderboardMorning(promotionId);
   return getCachedLeaderboardNight(promotionId);
 }

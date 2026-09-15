@@ -44,8 +44,18 @@ en elle-même. Corrigé côté code en plusieurs passes le même jour :
   `staleness.ts`).
 
 Résultat : l'egress ne dépend plus ni de la fréquence de poll ni du comportement des
-participants (rafraîchissement manuel compris) — plafond dur d'environ une requête Supabase réelle
-toutes les 15 min par promotion, quel que soit le trafic.
+participants (rafraîchissement manuel compris) — plafond dur d'une requête Supabase réelle par
+fenêtre `unstable_cache` et par promotion, quel que soit le trafic.
+
+**Révision du 2026-09-15** (upgrade Pro, 250 Go d'egress inclus au lieu des 5 Go du plan Free) :
+la fenêtre unique à 15 min était dimensionnée pour un quota gratuit très serré, pas pour donner une
+sensation de marché vivant. Analyse chiffrée (participants actifs × payload avatar/positions ×
+fenêtres/jour, voir le commit qui introduit `GOLDEN_INTERVAL_MS`) montrant une marge de >95% même
+avec un palier à 1 min pendant l'ouverture US : passage à **4 paliers** au lieu de 3
+(`src/lib/refresh-schedule.ts`) — 5 min de 9h à 15h30, **1 min de 15h30 à 18h** (heure la plus
+suivie du concours), 10 min de 18h à 22h, aucun rafraîchissement de 22h à 9h. Le mécanisme de cache
+mutualisé lui-même (celui qui rend F5 et le nombre de participants sans effet sur l'egress) est
+inchangé — seule la durée des fenêtres a été révisée à la hausse pour ce budget.
 
 Comme la mécanique exacte de fin de grace period n'est pas entièrement documentée par Supabase
 (voir discussions GitHub officielles sur le sujet), et par prudence pour un concours encore actif,
@@ -225,14 +235,19 @@ d'environnement listées à l'étape 2. Aucun accès à un compte Google, aucune
 d'un stagiaire précédent : un nouveau compte Vercel + Supabase (gratuits) suffit pour repartir de
 zéro sur un déploiement entièrement neuf.
 
-**Surveiller les limites du plan gratuit Supabase** (500 Mo de base, 5 Go de transfert/mois au
-moment de l'écriture — à vérifier sur supabase.com, ces chiffres évoluent) pour éviter de revivre
-l'incident du 2026-08-13 décrit plus haut, qui a nécessité une migration en urgence. Les
-mitigations déjà en place (fan-out d'avatars limité au podium dans `get-leaderboard.ts`, cache
-serveur partagé `unstable_cache` sur les 4 pages les plus visitées, intervalle `AutoRefresh` et
-cron d'ingestion unifiés à 15 min) devraient largement suffire pour cette échelle de concours (~10
-participants) — si l'usage remonte malgré tout près du quota, créer une nouvelle organisation
-Supabase (quota gratuit indépendant, voir procédure de l'incident) est un levier de secours rapide,
-avant d'envisager un plan payant. Si ce projet grossit significativement (beaucoup plus de 30
-participants, plusieurs promotions actives en parallèle), reposer la question de l'hébergement
-auprès de l'entreprise plutôt que de dépendre indéfiniment d'un plan gratuit personnel.
+**Surveiller les limites du plan Supabase actif** (Free : 500 Mo de base, 5 Go de transfert/mois ;
+Pro : 8 Go de base, 250 Go de transfert/mois — à vérifier sur supabase.com, ces chiffres évoluent)
+pour éviter de revivre l'incident du 2026-08-13 décrit plus haut, qui a nécessité une migration en
+urgence. Les mitigations déjà en place (cache serveur partagé `unstable_cache` sur les pages les
+plus visitées — donc F5/navigation et nombre de participants n'ont plus d'effet direct sur
+l'egress, voir la révision du 2026-09-15 ci-dessus pour le détail des 4 paliers horaires) devraient
+largement suffire même en repartant sur un compte Free pour cette échelle de concours (~10-40
+participants). Le fan-out d'avatars n'est plus limité au podium (`get-leaderboard.ts` les renvoie
+pour tous les participants) : c'est désormais le cache mutualisé, pas un repli d'affichage, qui
+plafonne ce coût — voir le commentaire dans ce fichier si ce compromis doit être revisité (au-delà
+de quelques centaines de participants). Si l'usage remonte malgré tout près du quota, créer une
+nouvelle organisation Supabase (quota gratuit indépendant, voir procédure de l'incident) est un
+levier de secours rapide, avant d'envisager un plan payant. Si ce projet grossit significativement
+(beaucoup plus de 40 participants, plusieurs promotions actives en parallèle), reposer la question
+de l'hébergement auprès de l'entreprise plutôt que de dépendre indéfiniment d'un plan gratuit
+personnel.

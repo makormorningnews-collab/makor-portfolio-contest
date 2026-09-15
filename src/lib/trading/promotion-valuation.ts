@@ -3,7 +3,13 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { AssetType } from "@/generated/prisma/enums";
 import { refreshAssetPricesIfStale } from "@/lib/prices/pull-through";
-import { getRefreshTier, MORNING_INTERVAL_MS, AFTERNOON_INTERVAL_MS, NIGHT_REVALIDATE_MS } from "@/lib/refresh-schedule";
+import {
+  getRefreshTier,
+  MORNING_INTERVAL_MS,
+  GOLDEN_INTERVAL_MS,
+  EVENING_INTERVAL_MS,
+  NIGHT_REVALIDATE_MS,
+} from "@/lib/refresh-schedule";
 import { computeAvailableCash } from "./execute-order";
 
 /**
@@ -161,7 +167,7 @@ export async function getPromotionValuation(
 
 /**
  * Variante mise en cache — voir {@link getPromotionValuation}. Même pattern à
- * trois paliers (matin / après-midi / nuit) que `getCachedLeaderboard`. Tags
+ * quatre paliers (matin / golden / soir / nuit) que `getCachedLeaderboard`. Tags
  * `leaderboard` + `portfolio-view` : tout ordre (participant ou correction
  * admin) invalide déjà ces deux tags, donc la valorisation partagée se
  * rafraîchit au même moment que les vues qui la consomment.
@@ -171,10 +177,15 @@ const getCachedPromotionValuationMorning = unstable_cache(
   ["promotion-valuation", "morning"],
   { revalidate: MORNING_INTERVAL_MS / 1000, tags: ["leaderboard", "portfolio-view"] },
 );
-const getCachedPromotionValuationAfternoon = unstable_cache(
+const getCachedPromotionValuationGolden = unstable_cache(
   (promotionId: string) => getPromotionValuation(promotionId),
-  ["promotion-valuation", "afternoon"],
-  { revalidate: AFTERNOON_INTERVAL_MS / 1000, tags: ["leaderboard", "portfolio-view"] },
+  ["promotion-valuation", "golden"],
+  { revalidate: GOLDEN_INTERVAL_MS / 1000, tags: ["leaderboard", "portfolio-view"] },
+);
+const getCachedPromotionValuationEvening = unstable_cache(
+  (promotionId: string) => getPromotionValuation(promotionId),
+  ["promotion-valuation", "evening"],
+  { revalidate: EVENING_INTERVAL_MS / 1000, tags: ["leaderboard", "portfolio-view"] },
 );
 const getCachedPromotionValuationNight = unstable_cache(
   (promotionId: string) => getPromotionValuation(promotionId),
@@ -184,7 +195,8 @@ const getCachedPromotionValuationNight = unstable_cache(
 
 export function getCachedPromotionValuation(promotionId: string): Promise<PromotionValuation> {
   const tier = getRefreshTier();
-  if (tier === "afternoon") return getCachedPromotionValuationAfternoon(promotionId);
+  if (tier === "golden") return getCachedPromotionValuationGolden(promotionId);
+  if (tier === "evening") return getCachedPromotionValuationEvening(promotionId);
   if (tier === "morning") return getCachedPromotionValuationMorning(promotionId);
   return getCachedPromotionValuationNight(promotionId);
 }

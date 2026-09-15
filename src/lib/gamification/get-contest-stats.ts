@@ -2,7 +2,13 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { getCachedPromotionValuation } from "@/lib/trading/promotion-valuation";
-import { getRefreshTier, MORNING_INTERVAL_MS, AFTERNOON_INTERVAL_MS, NIGHT_REVALIDATE_MS } from "@/lib/refresh-schedule";
+import {
+  getRefreshTier,
+  MORNING_INTERVAL_MS,
+  GOLDEN_INTERVAL_MS,
+  EVENING_INTERVAL_MS,
+  NIGHT_REVALIDATE_MS,
+} from "@/lib/refresh-schedule";
 import { buildTrades } from "./match-closing-trades";
 import type { LeaderboardRow } from "./get-leaderboard";
 
@@ -247,16 +253,21 @@ export async function getContestStats(promotionId: string, leaderboard: Leaderbo
 }
 
 /** Variante mise en cache — voir {@link getCachedLeaderboard} pour le raisonnement (même pattern
- * à trois variantes matin/après-midi/nuit selon l'heure). */
+ * à quatre variantes matin/golden/soir/nuit selon l'heure). */
 const getCachedContestStatsMorning = unstable_cache(
   (promotionId: string, leaderboard: LeaderboardRow[]) => getContestStats(promotionId, leaderboard),
   ["contest-stats", "morning"],
   { revalidate: MORNING_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
 );
-const getCachedContestStatsAfternoon = unstable_cache(
+const getCachedContestStatsGolden = unstable_cache(
   (promotionId: string, leaderboard: LeaderboardRow[]) => getContestStats(promotionId, leaderboard),
-  ["contest-stats", "afternoon"],
-  { revalidate: AFTERNOON_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
+  ["contest-stats", "golden"],
+  { revalidate: GOLDEN_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
+);
+const getCachedContestStatsEvening = unstable_cache(
+  (promotionId: string, leaderboard: LeaderboardRow[]) => getContestStats(promotionId, leaderboard),
+  ["contest-stats", "evening"],
+  { revalidate: EVENING_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
 );
 const getCachedContestStatsNight = unstable_cache(
   (promotionId: string, leaderboard: LeaderboardRow[]) => getContestStats(promotionId, leaderboard),
@@ -265,7 +276,8 @@ const getCachedContestStatsNight = unstable_cache(
 );
 export function getCachedContestStats(promotionId: string, leaderboard: LeaderboardRow[]): Promise<ContestStats> {
   const tier = getRefreshTier();
-  if (tier === "afternoon") return getCachedContestStatsAfternoon(promotionId, leaderboard);
+  if (tier === "golden") return getCachedContestStatsGolden(promotionId, leaderboard);
+  if (tier === "evening") return getCachedContestStatsEvening(promotionId, leaderboard);
   if (tier === "morning") return getCachedContestStatsMorning(promotionId, leaderboard);
   return getCachedContestStatsNight(promotionId, leaderboard);
 }

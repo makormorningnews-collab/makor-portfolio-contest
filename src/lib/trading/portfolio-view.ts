@@ -3,7 +3,13 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { AssetType, PromotionStatus } from "@/generated/prisma/enums";
 import { promotionRulesSchema } from "@/lib/promotion-rules";
-import { getRefreshTier, MORNING_INTERVAL_MS, AFTERNOON_INTERVAL_MS, NIGHT_REVALIDATE_MS } from "@/lib/refresh-schedule";
+import {
+  getRefreshTier,
+  MORNING_INTERVAL_MS,
+  GOLDEN_INTERVAL_MS,
+  EVENING_INTERVAL_MS,
+  NIGHT_REVALIDATE_MS,
+} from "@/lib/refresh-schedule";
 import { computeAvailableCash } from "./execute-order";
 import { getCachedPromotionValuation, getPromotionValuation } from "./promotion-valuation";
 
@@ -170,20 +176,25 @@ export async function getPortfolioView(userId: string): Promise<PortfolioView | 
  * après avoir modifié positions/transactions. Si un point de mutation futur
  * oublie cet appel, la fenêtre `revalidate` reste le filet de sécurité.
  *
- * Trois variantes (matin/après-midi/nuit, voir refresh-schedule.ts) plutôt
+ * Quatre variantes (matin/golden/soir/nuit, voir refresh-schedule.ts) plutôt
  * qu'une seule : `revalidate` est figé à la définition d'`unstable_cache`,
  * impossible à calculer dynamiquement à l'appel — `getCachedPortfolioView`
- * choisit entre les trois selon l'heure. Même tag sur les trois.
+ * choisit entre les quatre selon l'heure. Même tag sur les quatre.
  */
 const getCachedPortfolioViewMorning = unstable_cache(
   (userId: string) => getPortfolioView(userId),
   ["portfolio-view", "morning"],
   { revalidate: MORNING_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
 );
-const getCachedPortfolioViewAfternoon = unstable_cache(
+const getCachedPortfolioViewGolden = unstable_cache(
   (userId: string) => getPortfolioView(userId),
-  ["portfolio-view", "afternoon"],
-  { revalidate: AFTERNOON_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
+  ["portfolio-view", "golden"],
+  { revalidate: GOLDEN_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
+);
+const getCachedPortfolioViewEvening = unstable_cache(
+  (userId: string) => getPortfolioView(userId),
+  ["portfolio-view", "evening"],
+  { revalidate: EVENING_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
 );
 const getCachedPortfolioViewNight = unstable_cache(
   (userId: string) => getPortfolioView(userId),
@@ -192,7 +203,8 @@ const getCachedPortfolioViewNight = unstable_cache(
 );
 export function getCachedPortfolioView(userId: string): Promise<PortfolioView | null> {
   const tier = getRefreshTier();
-  if (tier === "afternoon") return getCachedPortfolioViewAfternoon(userId);
+  if (tier === "golden") return getCachedPortfolioViewGolden(userId);
+  if (tier === "evening") return getCachedPortfolioViewEvening(userId);
   if (tier === "morning") return getCachedPortfolioViewMorning(userId);
   return getCachedPortfolioViewNight(userId);
 }

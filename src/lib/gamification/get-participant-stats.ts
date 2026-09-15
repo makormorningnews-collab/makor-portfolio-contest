@@ -2,7 +2,13 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { getCachedPromotionValuation } from "@/lib/trading/promotion-valuation";
-import { getRefreshTier, MORNING_INTERVAL_MS, AFTERNOON_INTERVAL_MS, NIGHT_REVALIDATE_MS } from "@/lib/refresh-schedule";
+import {
+  getRefreshTier,
+  MORNING_INTERVAL_MS,
+  GOLDEN_INTERVAL_MS,
+  EVENING_INTERVAL_MS,
+  NIGHT_REVALIDATE_MS,
+} from "@/lib/refresh-schedule";
 import { buildTrades } from "./match-closing-trades";
 import type { BestWorstPosition, LeaderboardRow } from "./get-leaderboard";
 
@@ -147,18 +153,24 @@ type ParticipantStatsLeaderboardRow = Pick<
 >;
 
 /** Variante mise en cache — voir {@link getCachedLeaderboard} pour le raisonnement (même pattern
- * à trois variantes matin/après-midi/nuit selon l'heure). */
+ * à quatre variantes matin/golden/soir/nuit selon l'heure). */
 const getCachedParticipantStatsMorning = unstable_cache(
   (portfolioId: string, promotionId: string, leaderboardRow: ParticipantStatsLeaderboardRow) =>
     getParticipantStats(portfolioId, promotionId, leaderboardRow),
   ["participant-stats", "morning"],
   { revalidate: MORNING_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
 );
-const getCachedParticipantStatsAfternoon = unstable_cache(
+const getCachedParticipantStatsGolden = unstable_cache(
   (portfolioId: string, promotionId: string, leaderboardRow: ParticipantStatsLeaderboardRow) =>
     getParticipantStats(portfolioId, promotionId, leaderboardRow),
-  ["participant-stats", "afternoon"],
-  { revalidate: AFTERNOON_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
+  ["participant-stats", "golden"],
+  { revalidate: GOLDEN_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
+);
+const getCachedParticipantStatsEvening = unstable_cache(
+  (portfolioId: string, promotionId: string, leaderboardRow: ParticipantStatsLeaderboardRow) =>
+    getParticipantStats(portfolioId, promotionId, leaderboardRow),
+  ["participant-stats", "evening"],
+  { revalidate: EVENING_INTERVAL_MS / 1000, tags: ["portfolio-view"] },
 );
 const getCachedParticipantStatsNight = unstable_cache(
   (portfolioId: string, promotionId: string, leaderboardRow: ParticipantStatsLeaderboardRow) =>
@@ -172,7 +184,8 @@ export function getCachedParticipantStats(
   leaderboardRow: ParticipantStatsLeaderboardRow,
 ): Promise<ParticipantStats> {
   const tier = getRefreshTier();
-  if (tier === "afternoon") return getCachedParticipantStatsAfternoon(portfolioId, promotionId, leaderboardRow);
+  if (tier === "golden") return getCachedParticipantStatsGolden(portfolioId, promotionId, leaderboardRow);
+  if (tier === "evening") return getCachedParticipantStatsEvening(portfolioId, promotionId, leaderboardRow);
   if (tier === "morning") return getCachedParticipantStatsMorning(portfolioId, promotionId, leaderboardRow);
   return getCachedParticipantStatsNight(portfolioId, promotionId, leaderboardRow);
 }
