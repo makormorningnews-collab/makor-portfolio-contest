@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { verifySession } from "@/lib/dal";
 import { getHallOfFame } from "@/lib/gamification/hall-of-fame";
 import { closeEndedPromotions } from "@/lib/promotion-lifecycle";
@@ -62,6 +64,14 @@ export default async function HallOfFamePage() {
                       <CardTitle>{season.promotionName}</CardTitle>
                       <p className="mt-1 text-sm text-muted-foreground">{formatParisDate(season.closedAt)}</p>
                     </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      nativeButton={false}
+                      render={<Link href={`/hall-of-fame/${season.promotionId}/graphique`} />}
+                    >
+                      📈 Graphique final
+                    </Button>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-1.5">
                     {season.podium.map((e) => (
