@@ -11,10 +11,14 @@ const dbMock = {
 const getLeaderboardMock = vi.fn();
 const awardCloseOnlyBadgesMock = vi.fn();
 const revalidateTagMock = vi.fn();
+const getPromotionPerformanceSeriesMock = vi.fn();
 
 vi.mock("@/lib/db", () => ({ db: dbMock }));
 vi.mock("@/lib/gamification/get-leaderboard", () => ({ getLeaderboard: getLeaderboardMock }));
 vi.mock("@/lib/gamification/award-close-only-badges", () => ({ awardCloseOnlyBadges: awardCloseOnlyBadgesMock }));
+vi.mock("@/lib/gamification/get-promotion-performance-series", () => ({
+  getPromotionPerformanceSeries: getPromotionPerformanceSeriesMock,
+}));
 vi.mock("next/cache", () => ({ revalidateTag: revalidateTagMock }));
 
 const { closePromotionIfEnded, closeEndedPromotions, finalizePromotionClosure } = await import(
@@ -35,7 +39,9 @@ const PROMO = {
 
 function resetMocks() {
   Object.values(dbMock).forEach((g) => Object.values(g).forEach((fn) => fn.mockReset()));
-  [getLeaderboardMock, awardCloseOnlyBadgesMock, revalidateTagMock].forEach((fn) => fn.mockReset());
+  [getLeaderboardMock, awardCloseOnlyBadgesMock, revalidateTagMock, getPromotionPerformanceSeriesMock].forEach(
+    (fn) => fn.mockReset(),
+  );
   dbMock.promotion.findUniqueOrThrow.mockResolvedValue(PROMO);
   dbMock.promotion.findMany.mockResolvedValue([]);
   dbMock.changeSession.updateMany.mockResolvedValue({ count: 0 });
@@ -51,6 +57,16 @@ function resetMocks() {
     { userId: "u1", name: "Alice", portfolioId: "p1", totalValue: 1_120_000, cumulativeReturnPct: 12, rank: 1 },
     { userId: "u2", name: "Bob", portfolioId: "p2", totalValue: 980_000, cumulativeReturnPct: -2, rank: 2 },
   ]);
+  getPromotionPerformanceSeriesMock.mockResolvedValue({
+    points: [
+      {
+        date: "2026-08-28",
+        label: "28/08/2026",
+        values: { Alice: { totalValue: 1_120_000, cumulativeReturnPct: 12, dailyReturnPct: 0 } },
+      },
+    ],
+    participantNames: ["Alice", "Bob"],
+  });
 }
 
 beforeEach(() => {
@@ -257,5 +273,62 @@ describe("finalizePromotionClosure", () => {
     expect(awardCloseOnlyBadgesMock).toHaveBeenCalledWith("promo-1", NOW, expect.any(Array));
     const data = dbMock.hallOfFameEntry.createMany.mock.calls[0][0].data as { closedAt: Date }[];
     expect(data.every((row) => row.closedAt.getTime() === NOW.getTime())).toBe(true);
+  });
+});
+
+describe("finalizePromotionClosure — snapshot final du graphique", () => {
+  it("écrit finalChartSnapshot une seule fois (garde finalChartSnapshot: null)", async () => {
+    await finalizePromotionClosure("promo-1");
+
+    expect(getPromotionPerformanceSeriesMock).toHaveBeenCalledWith("promo-1");
+    expect(dbMock.promotion.updateMany).toHaveBeenCalledWith({
+      where: { id: "promo-1", finalChartSnapshot: null },
+      data: {
+        finalChartSnapshot: {
+          points: [
+            {
+              date: "2026-08-28",
+              label: "28/08/2026",
+              values: { Alice: { totalValue: 1_120_000, cumulativeReturnPct: 12, dailyReturnPct: 0 } },
+            },
+          ],
+          participantNames: ["Alice", "Bob"],
+          participantAvatars: { Alice: "data:image/jpeg;base64,alice", Bob: null },
+        },
+      },
+    });
+  });
+
+  it("retombe sur null pour un participant absent du classement final (garde-fou)", async () => {
+    getPromotionPerformanceSeriesMock.mockResolvedValue({
+      points: [],
+      participantNames: ["Alice", "Charlie"], // Charlie n'est pas dans getLeaderboardMock
+    });
+
+    await finalizePromotionClosure("promo-1");
+
+    const call = dbMock.promotion.updateMany.mock.calls[0][0] as {
+      data: { finalChartSnapshot: { participantAvatars: Record<string, string | null> } };
+    };
+    expect(call.data.finalChartSnapshot.participantAvatars).toEqual({
+      Alice: "data:image/jpeg;base64,alice",
+      Charlie: null,
+    });
+  });
+
+  it("appelle getPromotionPerformanceSeries après l'écriture du snapshot terminal (ordre)", async () => {
+    const callOrder: string[] = [];
+    dbMock.performanceSnapshot.createMany.mockImplementation(async () => {
+      callOrder.push("createMany-snapshot-terminal");
+      return { count: 2 };
+    });
+    getPromotionPerformanceSeriesMock.mockImplementation(async () => {
+      callOrder.push("getPromotionPerformanceSeries");
+      return { points: [], participantNames: [] };
+    });
+
+    await finalizePromotionClosure("promo-1");
+
+    expect(callOrder).toEqual(["createMany-snapshot-terminal", "getPromotionPerformanceSeries"]);
   });
 });

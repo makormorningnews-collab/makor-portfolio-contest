@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { PromotionStatus, ChangeSessionStatus } from "@/generated/prisma/enums";
 import { getLeaderboard } from "@/lib/gamification/get-leaderboard";
 import { awardCloseOnlyBadges } from "@/lib/gamification/award-close-only-badges";
+import { getPromotionPerformanceSeries } from "@/lib/gamification/get-promotion-performance-series";
 
 /**
  * Clôt une promotion si sa date+heure de fin est atteinte. Idempotent et
@@ -111,6 +112,28 @@ export async function finalizePromotionClosure(promotionId: string): Promise<voi
   if (finalSnapshots.length > 0) {
     await db.performanceSnapshot.createMany({ data: finalSnapshots });
   }
+
+  // Snapshot figé du graphique comparatif — indépendant de PerformanceSnapshot au sens où,
+  // une fois écrit ici, il n'est plus jamais relu depuis cette table : un futur changement de
+  // rétention/purge sur les concours actifs ne peut pas l'affecter. Lu après l'écriture du
+  // snapshot terminal ci-dessus, donc la courbe se termine exactement à `asOf`. Garde
+  // `finalChartSnapshot: null` : write-once, un rejeu (clôture paresseuse, self-heal
+  // /resultats, balayage `stuck`) est un no-op sur ce champ.
+  const performanceSeries = await getPromotionPerformanceSeries(promotionId);
+  const avatarByName = new Map(finalRows.map((row) => [row.name, avatarByUserId.get(row.userId) ?? null]));
+  const participantAvatars: Record<string, string | null> = Object.fromEntries(
+    performanceSeries.participantNames.map((name) => [name, avatarByName.get(name) ?? null]),
+  );
+  await db.promotion.updateMany({
+    where: { id: promotionId, finalChartSnapshot: null as any },
+    data: {
+      finalChartSnapshot: {
+        points: performanceSeries.points,
+        participantNames: performanceSeries.participantNames,
+        participantAvatars,
+      } as any,
+    },
+  });
 
   // Invalidation best-effort du classement live (le Hall of Fame n'est plus
   // caché — hall-of-fame.ts lit la table à chaque affichage). `revalidateTag`
