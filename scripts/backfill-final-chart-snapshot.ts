@@ -85,6 +85,10 @@ async function main() {
     console.log(
       `  ${promo.name} : ${built.points.length} point(s), ${built.participantNames.length} participant(s)`,
     );
+    if (built.points.length === 0) {
+      console.log(`  ⚠️ ${promo.name} : aucun historique reconstruit — snapshot non écrit`);
+      continue;
+    }
     // Typé explicitement avant conversion en InputJsonValue — voir promotion-lifecycle.ts
     // (même limitation TS : cast via `unknown` requis, l'assignation ci-dessous type-checke
     // quand même ce qu'on écrit réellement).

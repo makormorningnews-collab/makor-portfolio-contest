@@ -302,7 +302,10 @@ describe("finalizePromotionClosure — snapshot final du graphique", () => {
 
   it("retombe sur null pour un participant absent du classement final (garde-fou)", async () => {
     getPromotionPerformanceSeriesMock.mockResolvedValue({
-      points: [],
+      // Non vide : un tableau `points` vide ne déclenche plus l'écriture (voir garde
+      // "n'écrit pas de snapshot quand la reconstruction est vide" ci-dessous) — ce
+      // test porte sur le fallback participantAvatars, pas sur ce garde-fou.
+      points: [{ date: "2026-08-28", label: "28/08/2026", values: {} }],
       participantNames: ["Alice", "Charlie"], // Charlie n'est pas dans getLeaderboardMock
     });
 
@@ -331,5 +334,13 @@ describe("finalizePromotionClosure — snapshot final du graphique", () => {
     await finalizePromotionClosure("promo-1");
 
     expect(callOrder).toEqual(["createMany-snapshot-terminal", "getPromotionPerformanceSeries"]);
+  });
+
+  it("n'écrit pas de snapshot quand la reconstruction est vide (rien à afficher)", async () => {
+    getPromotionPerformanceSeriesMock.mockResolvedValue({ points: [], participantNames: [] });
+
+    await finalizePromotionClosure("promo-1");
+
+    expect(dbMock.promotion.updateMany).not.toHaveBeenCalled();
   });
 });

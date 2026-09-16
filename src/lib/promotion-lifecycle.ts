@@ -142,10 +142,15 @@ export async function finalizePromotionClosure(promotionId: string): Promise<voi
     participantNames: performanceSeries.participantNames,
     participantAvatars,
   };
-  await db.promotion.updateMany({
-    where: { id: promotionId, finalChartSnapshot: { equals: Prisma.DbNull } },
-    data: { finalChartSnapshot: snapshot as unknown as Prisma.InputJsonValue },
-  });
+  // Rien à afficher (aucun historique reconstruit) : ne pas écrire — le champ est
+  // write-once, un snapshot vide écrit ici serait définitif et ne pourrait plus
+  // jamais être corrigé par un rejeu ou un backfill.
+  if (performanceSeries.points.length > 0) {
+    await db.promotion.updateMany({
+      where: { id: promotionId, finalChartSnapshot: { equals: Prisma.DbNull } },
+      data: { finalChartSnapshot: snapshot as unknown as Prisma.InputJsonValue },
+    });
+  }
 
   // Invalidation best-effort du classement live (le Hall of Fame n'est plus
   // caché — hall-of-fame.ts lit la table à chaque affichage). `revalidateTag`
