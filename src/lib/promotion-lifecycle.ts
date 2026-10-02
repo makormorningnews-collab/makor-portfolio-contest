@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { PromotionStatus, ChangeSessionStatus } from "@/generated/prisma/enums";
 import { getLeaderboard } from "@/lib/gamification/get-leaderboard";
 import { awardCloseOnlyBadges } from "@/lib/gamification/award-close-only-badges";
+import { CLOSE_ONLY_CODES } from "@/lib/gamification/badges/catalog";
 import {
   getPromotionPerformanceSeries,
   type PromotionPerformancePoint,
@@ -210,4 +211,133 @@ export async function closeEndedPromotions(now: Date = new Date()): Promise<stri
   }
 
   return closed;
+}
+
+/**
+ * Statut à remettre sur une session de changement lors d'une réouverture.
+ * finalizePromotionClosure force toutes les sessions non fermées à CLOSED sans
+ * garder l'ancien statut ; la seule trace d'une dérogation manuelle de l'admin
+ * (« Ouvrir / Fermer maintenant ») est son dernier `change-session.status` dans
+ * l'AuditLog. Sans dérogation, la session revient au cas normal SCHEDULED, et
+ * computeChangeSessionStatus la recalcule depuis sa fenêtre — une session déjà
+ * passée reste donc fermée, une session future redevient programmée.
+ */
+export function statusToRestoreOnReopen(latestManualStatus: string | null | undefined): ChangeSessionStatus {
+  if (latestManualStatus === ChangeSessionStatus.CLOSED) return ChangeSessionStatus.CLOSED;
+  if (latestManualStatus === ChangeSessionStatus.OPEN) return ChangeSessionStatus.OPEN;
+  return ChangeSessionStatus.SCHEDULED;
+}
+
+export type ReopenPromotionResult =
+  | {
+      reopened: true;
+      restoredSessions: number;
+      removedHallOfFameEntries: number;
+      removedBadges: number;
+      removedFinalSnapshots: number;
+    }
+  | { reopened: false; error: string };
+
+/**
+ * Annule une clôture (typiquement un clic accidentel sur « Clôturer la
+ * promotion ») en défaisant exactement ce qu'a écrit finalizePromotionClosure :
+ * statut CLOSED, entrées Hall of Fame, badges close-only, snapshot de
+ * performance terminal, graphique figé et sessions de changement forcées à
+ * CLOSED. Portefeuilles, positions et transactions ne sont jamais touchés par
+ * la clôture, il n'y a donc rien à restaurer de ce côté. Tout est fait dans
+ * une seule transaction : la clôture réelle, plus tard, réécrira un résultat
+ * neuf au lieu de garder celui figé par erreur (createMany skipDuplicates et
+ * le garde write-once de finalChartSnapshot l'empêcheraient sinon).
+ */
+export async function reopenPromotion(promotionId: string, now: Date = new Date()): Promise<ReopenPromotionResult> {
+  const promotion = await db.promotion.findUniqueOrThrow({
+    where: { id: promotionId },
+    select: { status: true, endDate: true },
+  });
+  if (promotion.status !== PromotionStatus.CLOSED) {
+    return { reopened: false, error: "Cette promotion n'est pas clôturée." };
+  }
+  if (promotion.endDate <= now) {
+    return {
+      reopened: false,
+      error:
+        "La date de fin est déjà passée : le concours se refermerait aussitôt. Repousse d'abord la date de fin dans Paramètres, puis rouvre la promotion.",
+    };
+  }
+  const otherActive = await db.promotion.findFirst({
+    where: { id: { not: promotionId }, status: PromotionStatus.ACTIVE },
+    select: { name: true },
+  });
+  if (otherActive) {
+    return {
+      reopened: false,
+      error: `La promotion « ${otherActive.name} » est déjà en cours : une seule promotion peut être active à la fois.`,
+    };
+  }
+
+  const result = await db.$transaction(async (tx) => {
+    // Transition conditionnelle, comme closePromotionIfEnded : si un autre
+    // onglet a déjà rouvert, count = 0 et on ne touche à rien.
+    const { count } = await tx.promotion.updateMany({
+      where: { id: promotionId, status: PromotionStatus.CLOSED },
+      data: { status: PromotionStatus.ACTIVE, finalChartSnapshot: Prisma.DbNull },
+    });
+    if (count === 0) return null;
+
+    const closureTimes = await tx.hallOfFameEntry.findMany({
+      where: { promotionId },
+      select: { closedAt: true },
+      distinct: ["closedAt"],
+    });
+    const removedFinalSnapshots =
+      closureTimes.length > 0
+        ? (
+            await tx.performanceSnapshot.deleteMany({
+              where: { portfolio: { promotionId }, timestamp: { in: closureTimes.map((row) => row.closedAt) } },
+            })
+          ).count
+        : 0;
+    const removedHallOfFameEntries = (await tx.hallOfFameEntry.deleteMany({ where: { promotionId } })).count;
+    const removedBadges = (
+      await tx.userBadge.deleteMany({ where: { promotionId, badge: { code: { in: [...CLOSE_ONLY_CODES] } } } })
+    ).count;
+
+    const closedSessions = await tx.changeSession.findMany({
+      where: { promotionId, status: ChangeSessionStatus.CLOSED },
+      select: { id: true },
+    });
+    const manualChanges = await tx.auditLog.findMany({
+      where: { action: "change-session.status", target: { in: closedSessions.map((session) => session.id) } },
+      orderBy: { createdAt: "desc" },
+      select: { target: true, after: true },
+    });
+    const latestManualStatus = new Map<string, string | undefined>();
+    for (const change of manualChanges) {
+      if (latestManualStatus.has(change.target)) continue;
+      const after = change.after as { status?: string } | null;
+      latestManualStatus.set(change.target, after?.status);
+    }
+    const idsByStatus = new Map<ChangeSessionStatus, string[]>();
+    for (const session of closedSessions) {
+      const status = statusToRestoreOnReopen(latestManualStatus.get(session.id));
+      if (status === ChangeSessionStatus.CLOSED) continue;
+      idsByStatus.set(status, [...(idsByStatus.get(status) ?? []), session.id]);
+    }
+    let restoredSessions = 0;
+    for (const [status, ids] of idsByStatus) {
+      restoredSessions += (await tx.changeSession.updateMany({ where: { id: { in: ids } }, data: { status } })).count;
+    }
+
+    return { restoredSessions, removedHallOfFameEntries, removedBadges, removedFinalSnapshots };
+  });
+
+  if (!result) return { reopened: false, error: "Cette promotion a déjà été rouverte." };
+
+  try {
+    revalidateTag("leaderboard", "max");
+    revalidateTag("portfolio-view", "max");
+  } catch {
+    // même raison que dans finalizePromotionClosure
+  }
+  return { reopened: true, ...result };
 }

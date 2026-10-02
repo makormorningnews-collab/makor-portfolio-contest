@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PromotionForm } from "./promotion-form";
 import { setPromotionStatus } from "./actions";
 import { PromotionRowActions } from "./promotion-row-actions";
+import { PromotionStatusActions } from "./promotion-status-actions";
 
 const statusLabels: Record<PromotionStatus, string> = {
   DRAFT: "Brouillon",
@@ -15,15 +16,6 @@ const statusLabels: Record<PromotionStatus, string> = {
   CLOSED: "Terminée",
 };
 
-const nextStatus: Partial<Record<PromotionStatus, PromotionStatus>> = {
-  DRAFT: PromotionStatus.ACTIVE,
-  ACTIVE: PromotionStatus.CLOSED,
-};
-
-const nextStatusLabel: Partial<Record<PromotionStatus, string>> = {
-  DRAFT: "Ouvrir la promotion",
-  ACTIVE: "Clôturer la promotion",
-};
 
 export default async function PromotionsPage() {
   const promotions = await db.promotion.findMany({
@@ -47,7 +39,6 @@ export default async function PromotionsPage() {
           <p className="text-sm text-muted-foreground">Aucune promotion pour le moment.</p>
         )}
         {promotions.map((promotion) => {
-          const upcoming = nextStatus[promotion.status];
           return (
             <Card key={promotion.id}>
               <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
@@ -69,13 +60,14 @@ export default async function PromotionsPage() {
                 <Button variant="ghost" nativeButton={false} render={<Link href={`/admin/promotions/${promotion.id}`} />}>
                   Sessions de changement
                 </Button>
-                {upcoming && (
-                  <form action={setPromotionStatus.bind(null, promotion.id, upcoming)}>
+                {promotion.status === PromotionStatus.DRAFT && (
+                  <form action={setPromotionStatus.bind(null, promotion.id, PromotionStatus.ACTIVE)}>
                     <Button type="submit" variant="outline">
-                      {nextStatusLabel[promotion.status]}
+                      Ouvrir la promotion
                     </Button>
                   </form>
                 )}
+                <PromotionStatusActions promotionId={promotion.id} name={promotion.name} status={promotion.status} />
                 <PromotionRowActions
                   promotionId={promotion.id}
                   name={promotion.name}

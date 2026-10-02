@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { promotionRulesSchema } from "@/lib/promotion-rules";
 import { provisionPortfolios } from "@/lib/portfolio-provisioning";
 import { ensureInitializationWindow } from "@/lib/initialization-window";
-import { finalizePromotionClosure } from "@/lib/promotion-lifecycle";
+import { finalizePromotionClosure, reopenPromotion as reopenPromotionLifecycle } from "@/lib/promotion-lifecycle";
 import { PromotionStatus } from "@/generated/prisma/enums";
 import { createPromotionSchema, updatePromotionBasicsSchema } from "./schema";
 
@@ -163,4 +163,34 @@ export async function setPromotionStatus(promotionId: string, status: PromotionS
   });
 
   revalidatePath("/admin/promotions");
+}
+
+export interface ReopenPromotionState {
+  error?: string;
+}
+
+/** Annule une clôture — voir reopenPromotion dans src/lib/promotion-lifecycle.ts. */
+export async function reopenPromotion(promotionId: string): Promise<ReopenPromotionState> {
+  const session = await requireAdmin();
+
+  const result = await reopenPromotionLifecycle(promotionId);
+  if (!result.reopened) return { error: result.error };
+
+  await logAudit({
+    adminId: session.user.id,
+    action: "promotion.reopen",
+    target: promotionId,
+    before: { status: PromotionStatus.CLOSED },
+    after: {
+      status: PromotionStatus.ACTIVE,
+      restoredSessions: result.restoredSessions,
+      removedHallOfFameEntries: result.removedHallOfFameEntries,
+      removedBadges: result.removedBadges,
+      removedFinalSnapshots: result.removedFinalSnapshots,
+    },
+  });
+
+  revalidatePath("/admin/promotions");
+  revalidatePath(`/admin/promotions/${promotionId}`);
+  return {};
 }
