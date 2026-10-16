@@ -1,5 +1,6 @@
 import "server-only";
 import { BinanceProvider } from "@/lib/prices/providers/binance-provider";
+import { CoinGeckoProvider } from "@/lib/prices/providers/coingecko-provider";
 import { TwelveDataProvider } from "@/lib/prices/providers/twelve-data-provider";
 import { YahooProvider } from "@/lib/prices/providers/yahoo-provider";
 import { TradingViewProvider } from "@/lib/prices/providers/tradingview-provider";
@@ -15,11 +16,18 @@ import type { PriceProvider } from "@/lib/prices/types";
  * dotted (mostly European) symbols, TwelveData.supports() only matches
  * non-dotted (US-shaped) ones, so the two never compete for the same asset —
  * order between them doesn't matter for correctness, only for reading order.
+ * For crypto, Binance goes first (near real-time, no quota) and CoinGecko
+ * covers coins Binance spot doesn't list (see coingecko-provider.ts).
  * Add a new source by pushing another provider here in the right position —
  * nothing else needs to change.
  */
 export function getPriceProviders(): PriceProvider[] {
-  const providers: PriceProvider[] = [new BinanceProvider(), new YahooProvider(), new TradingViewProvider()];
+  const providers: PriceProvider[] = [
+    new BinanceProvider(),
+    new CoinGeckoProvider(),
+    new YahooProvider(),
+    new TradingViewProvider(),
+  ];
 
   if (process.env.TWELVE_DATA_API_KEY) {
     providers.push(new TwelveDataProvider(process.env.TWELVE_DATA_API_KEY));

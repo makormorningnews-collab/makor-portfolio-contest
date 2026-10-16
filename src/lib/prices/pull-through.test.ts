@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AssetType } from "@/generated/prisma/enums";
 import type { Asset } from "@/generated/prisma/client";
 import type { PriceProvider } from "@/lib/prices/types";
-import { STOCK_PRICE_STALE_MS, CRYPTO_PRICE_STALE_MS } from "@/lib/prices/staleness";
+import { STOCK_PRICE_STALE_MS, CRYPTO_PRICE_STALE_MS, COINGECKO_PRICE_STALE_MS } from "@/lib/prices/staleness";
 
 const priceFindManyMock = vi.fn();
 const priceCreateMock = vi.fn();
@@ -199,6 +199,26 @@ describe("refreshAssetPricesIfStale", () => {
     const result = await refreshAssetPricesIfStale([makeAsset({ type: AssetType.CRYPTO })], now);
 
     expect(result.get("asset-1")).toEqual({ price: 105, timestamp: now, isStale: false });
+  });
+
+  it("applies the longer CoinGecko threshold to a crypto whose last price came from CoinGecko", async () => {
+    const now = new Date("2026-01-01T12:00:00Z");
+    // Past CRYPTO_PRICE_STALE_MS but within COINGECKO_PRICE_STALE_MS — must NOT refresh,
+    // otherwise every page view would burn CoinGecko's ~30 req/min free quota.
+    const timestamp = new Date(now.getTime() - CRYPTO_PRICE_STALE_MS - 1000);
+    priceFindManyMock.mockResolvedValue([{ assetId: "asset-1", price: 0.14, timestamp, source: "coingecko" }]);
+    const fetchPrice = vi.fn();
+    getPriceProvidersMock.mockReturnValue([makeProvider({ fetchPrice })]);
+
+    const result = await refreshAssetPricesIfStale([makeAsset({ type: AssetType.CRYPTO })], now);
+
+    expect(fetchPrice).not.toHaveBeenCalled();
+    expect(result.get("asset-1")).toEqual({ price: 0.14, timestamp, isStale: false });
+
+    const later = new Date(now.getTime() + COINGECKO_PRICE_STALE_MS);
+    fetchPrice.mockResolvedValue({ price: 0.15, timestamp: later, source: "coingecko" });
+    await refreshAssetPricesIfStale([makeAsset({ type: AssetType.CRYPTO })], later);
+    expect(fetchPrice).toHaveBeenCalledTimes(1);
   });
 });
 

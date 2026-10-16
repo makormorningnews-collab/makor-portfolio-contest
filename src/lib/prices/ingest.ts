@@ -54,7 +54,7 @@ export async function ingestAssetPrices(providers: PriceProvider[], now: Date = 
 
   for (const asset of assets) {
     const latest = latestByAsset.get(asset.id);
-    if (!isPriceStale(latest?.timestamp, asset.type, now)) {
+    if (!isPriceStale(latest?.timestamp, asset.type, now, latest?.source)) {
       results.push({ assetId: asset.id, symbol: asset.symbol, status: "skipped", price: latest ? Number(latest.price) : undefined });
       continue;
     }

@@ -33,12 +33,24 @@ export const STOCK_PRICE_STALE_MS = 10 * 60 * 1000;
  */
 export const CRYPTO_PRICE_STALE_MS = 10 * 1000;
 
-export function getPriceStaleMs(type: AssetType): number {
-  return type === AssetType.CRYPTO ? CRYPTO_PRICE_STALE_MS : STOCK_PRICE_STALE_MS;
+/**
+ * Cryptos absentes de Binance spot, cotées via CoinGecko (voir
+ * coingecko-provider.ts) : l'API publique plafonne à ~30 requêtes/min, donc
+ * un seuil de 10 s, appliqué à chaque affichage, l'épuiserait dès quelques
+ * actifs suivis. On reconnaît ces actifs à la source de leur dernier prix.
+ */
+export const COINGECKO_PRICE_STALE_MS = 60 * 1000;
+
+export function getPriceStaleMs(type: AssetType, latestSource?: string): number {
+  if (type !== AssetType.CRYPTO) return STOCK_PRICE_STALE_MS;
+  return latestSource === "coingecko" ? COINGECKO_PRICE_STALE_MS : CRYPTO_PRICE_STALE_MS;
 }
 
-/** `true` si `latestTimestamp` est absent ou plus vieux que le seuil applicable à `type`. */
-export function isPriceStale(latestTimestamp: Date | undefined, type: AssetType, now: Date): boolean {
+/**
+ * `true` si `latestTimestamp` est absent ou plus vieux que le seuil applicable
+ * à `type` (et à `latestSource`, la source de ce dernier prix).
+ */
+export function isPriceStale(latestTimestamp: Date | undefined, type: AssetType, now: Date, latestSource?: string): boolean {
   if (!latestTimestamp) return true;
-  return now.getTime() - latestTimestamp.getTime() > getPriceStaleMs(type);
+  return now.getTime() - latestTimestamp.getTime() > getPriceStaleMs(type, latestSource);
 }

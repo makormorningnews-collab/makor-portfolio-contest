@@ -114,7 +114,7 @@ export async function refreshAssetPricesIfStale(
   for (const id of forceRefreshAssetIds) frozenAssetIds.delete(id);
 
   const staleAssets = assets.filter(
-    (asset) => !frozenAssetIds.has(asset.id) && isPriceStale(latestByAsset.get(asset.id)?.timestamp, asset.type, now),
+    (asset) => !frozenAssetIds.has(asset.id) && isPriceStale(latestByAsset.get(asset.id)?.timestamp, asset.type, now, latestByAsset.get(asset.id)?.source),
   );
   const providers = staleAssets.length > 0 ? getPriceProviders() : [];
 
@@ -131,7 +131,7 @@ export async function refreshAssetPricesIfStale(
         return;
       }
 
-      const isStale = isPriceStale(latest?.timestamp, asset.type, now);
+      const isStale = isPriceStale(latest?.timestamp, asset.type, now, latest?.source);
 
       if (!isStale) {
         result.set(asset.id, { price: Number(latest!.price), timestamp: latest!.timestamp, isStale: false });
