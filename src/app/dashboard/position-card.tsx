@@ -44,9 +44,12 @@ function Stat({ label, value, className }: { label: string; value: string; class
 export function PositionCard({
   position,
   contestClosed = false,
+  sellDisabled = false,
 }: {
   position: PositionView;
   contestClosed?: boolean;
+  /** Fenêtre de constitution : seuls achats et renforcements sont permis (voir rules-engine.ts). */
+  sellDisabled?: boolean;
 }) {
   const [mode, setMode] = useState<"idle" | "increase" | "sell">("idle");
   const [isChartOpen, setIsChartOpen] = useState(false);
@@ -116,14 +119,18 @@ export function PositionCard({
             <Button variant="outline" size="sm" onClick={() => setMode(mode === "increase" ? "idle" : "increase")}>
               Renforcer
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setMode(mode === "sell" ? "idle" : "sell")}>
-              Vendre une partie
-            </Button>
-            <form action={sellFullFormAction}>
-              <Button type="submit" variant="destructive" size="sm" disabled={sellFullPending}>
-                Vendre tout
-              </Button>
-            </form>
+            {!sellDisabled && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setMode(mode === "sell" ? "idle" : "sell")}>
+                  Vendre une partie
+                </Button>
+                <form action={sellFullFormAction}>
+                  <Button type="submit" variant="destructive" size="sm" disabled={sellFullPending}>
+                    Vendre tout
+                  </Button>
+                </form>
+              </>
+            )}
           </div>
         )}
 
@@ -136,7 +143,7 @@ export function PositionCard({
             </Button>
           </form>
         )}
-        {!contestClosed && mode === "sell" && (
+        {!contestClosed && !sellDisabled && mode === "sell" && (
           <form action={sellFormAction} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="assetId" value={position.assetId} />
             <Input name="quantity" type="number" step="any" placeholder="Quantité" required className="w-full sm:w-40" />

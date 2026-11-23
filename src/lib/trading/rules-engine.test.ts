@@ -129,6 +129,40 @@ describe("validateOrder — garde-fous globaux", () => {
   });
 });
 
+describe("validateOrder — fenêtre de constitution (pas de trading intraday)", () => {
+  const position = { assetId: "asset-aapl", assetType: AssetType.STOCK, quantity: 500, avgEntryPrice: 100, currentPrice: 100 };
+  const initCtx = () =>
+    baseContext({
+      changeSession: { ...baseContext().changeSession!, kind: ChangeSessionKind.INITIALIZATION },
+      positions: [position],
+    });
+
+  it("refuse une vente totale pendant la constitution", () => {
+    const result = validateOrder({ type: "SELL_FULL", assetId: "asset-aapl" }, initCtx());
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain("fenêtre de constitution");
+  });
+
+  it("refuse une vente partielle pendant la constitution", () => {
+    const result = validateOrder({ type: "SELL_PARTIAL", assetId: "asset-aapl", quantity: 100 }, initCtx());
+
+    expect(result.ok).toBe(false);
+  });
+
+  it("autorise toujours le renforcement pendant la constitution", () => {
+    const result = validateOrder({ type: "INCREASE", assetId: "asset-aapl", amount: 10_000 }, initCtx());
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("autorise la vente lors d'une session hebdomadaire", () => {
+    const result = validateOrder({ type: "SELL_FULL", assetId: "asset-aapl" }, baseContext({ positions: [position] }));
+
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe("validateOrder — BUY (nouvelle position)", () => {
   it("accepte un achat dans les bornes de taille de position", () => {
     const ctx = baseContext();

@@ -22,12 +22,15 @@ export function PortfolioSummary({
   transactionHistory,
   contestClosed,
   readOnly = false,
+  sellDisabled = false,
 }: {
   portfolioView: PortfolioView;
   performanceHistory: PerformancePoint[];
   transactionHistory: TransactionHistoryItem[];
   contestClosed: boolean;
   readOnly?: boolean;
+  /** Vrai pendant la fenêtre de constitution : boutons de vente masqués (ventes interdites, voir rules-engine.ts). */
+  sellDisabled?: boolean;
 }) {
   const isReadOnly = contestClosed || readOnly;
 
@@ -117,7 +120,12 @@ export function PortfolioSummary({
           <p className="text-sm text-muted-foreground">Aucune position ouverte pour le moment.</p>
         )}
         {portfolioView.positions.map((position) => (
-          <PositionCard key={position.assetId} position={position} contestClosed={isReadOnly} />
+          <PositionCard
+            key={position.assetId}
+            position={position}
+            contestClosed={isReadOnly}
+            sellDisabled={sellDisabled}
+          />
         ))}
       </div>
 

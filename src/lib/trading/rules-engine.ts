@@ -140,6 +140,13 @@ export function validateOrder(order: TradeOrderInput, ctx: TradeContext): TradeV
   if (!isInitializationWindow && ctx.changesUsed >= ctx.changeSession!.maxChangesPerParticipant) {
     return fail("Le quota de changements de cette session est atteint.");
   }
+  // Règlement : pas de trading intraday pendant la constitution — une ligne
+  // achetée ne peut plus être vendue avant la prochaine session de changement.
+  if (isInitializationWindow && (order.type === "SELL_PARTIAL" || order.type === "SELL_FULL")) {
+    return fail(
+      "Les ventes sont interdites pendant la fenêtre de constitution du portefeuille — attendez la prochaine session de changement.",
+    );
+  }
 
   switch (order.type) {
     case "BUY":

@@ -47,8 +47,9 @@ export function InitializationWindowBanner({ closesAt, investedAmount, initialCa
         <p className="tabular-nums">{isClosed ? "Fermée" : `⏱ Ferme dans ${formatRemaining(remainingMs)}`}</p>
       </div>
       <p className="mt-1 text-muted-foreground">
-        Investissez librement votre capital initial — aucune limite de nombre de changements pendant cette
-        fenêtre. Les autres règles (positions, cryptomonnaies) restent en vigueur.
+        Investissez votre capital initial — aucune limite de nombre d&apos;achats pendant cette fenêtre. Le
+        trading intraday est interdit : une ligne achetée ne peut plus être vendue avant la prochaine session de
+        changement. Les autres règles (positions, cryptomonnaies) restent en vigueur.
       </p>
       <div className="mt-3">
         <div className="flex items-center justify-between text-xs text-muted-foreground">

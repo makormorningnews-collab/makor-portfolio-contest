@@ -132,6 +132,7 @@ export default async function DashboardPage() {
               performanceHistory={performanceHistory}
               transactionHistory={transactionHistory}
               contestClosed={Boolean(contestClosed)}
+              sellDisabled={isInitializationWindow}
             />
           </div>
         )}

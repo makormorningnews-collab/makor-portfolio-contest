@@ -193,10 +193,16 @@ export function RulesDocument({
           Au lancement du concours, une <strong className="text-foreground">fenêtre de constitution</strong>{" "}
           s&apos;ouvre automatiquement pour une durée de{" "}
           <strong className="text-foreground">{formatDurationHours(rules.initializationWindowHours)}</strong>.{" "}
-          Pendant cette fenêtre, les achats, ventes et remplacements de positions sont{" "}
+          Pendant cette fenêtre, les achats et renforcements de positions sont{" "}
           <strong className="text-foreground">illimités</strong>{" "}
           — l&apos;objectif est d&apos;investir l&apos;intégralité du capital initial avant sa fermeture.
         </p>
+        <InfoBox variant="warning">
+          <strong className="text-foreground">Le trading intraday est interdit pendant la constitution.</strong>{" "}
+          Aucune vente (partielle ou totale) n&apos;est possible pendant cette fenêtre : une fois vos{" "}
+          {rules.maxPositions} lignes choisies, vous ne pouvez plus faire marche arrière jusqu&apos;à la prochaine
+          session de changement. Choisissez donc chaque ligne avec soin.
+        </InfoBox>
         {initializationSession && (
           <InfoBox>
             Fenêtre {initializationSession.effectiveStatus === "OPEN" ? "actuellement ouverte" : "programmée"} du{" "}
