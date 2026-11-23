@@ -4,17 +4,13 @@ import { signedPct } from "@/app/statistiques/format";
 import type { HallOfFameEntryView } from "@/lib/gamification/hall-of-fame";
 
 /**
- * Miroir "pire performance" du Hall of Fame — réutilise `entries` (même liste
- * triée par getHallOfFame, lue par l'autre bout) donc jamais de source de
- * vérité divergente entre les deux moitiés de la page.
+ * Miroir "pire performance" du Hall of Fame — `worstRecord` est le dernier
+ * élément de `entries` (même liste triée par getHallOfFame que le record
+ * historique), donc jamais de source de vérité divergente entre les deux
+ * moitiés de la page. Volontairement limité à la seule pire performance :
+ * pas de classement complet de tous les temps.
  */
-export function HallOfShameSection({
-  worstRecord,
-  worstEntries,
-}: {
-  worstRecord: HallOfFameEntryView | null;
-  worstEntries: HallOfFameEntryView[];
-}) {
+export function HallOfShameSection({ worstRecord }: { worstRecord: HallOfFameEntryView | null }) {
   if (!worstRecord) return null;
 
   return (
@@ -48,35 +44,6 @@ export function HallOfShameSection({
         </CardContent>
       </Card>
 
-      {worstEntries.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold">Pires performances de tous les temps</h2>
-          <Card className="mt-4 ring-loss/30">
-            <CardContent className="flex flex-col gap-1.5 pt-6">
-              {worstEntries.map((e, i) => (
-                <div
-                  key={`${e.promotionId}-${e.finalRank}`}
-                  className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-0"
-                >
-                  <span className="w-6 shrink-0 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
-                  <UserAvatar name={e.userName} avatarUrl={e.avatarUrl} size="sm" className="shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">
-                    <span className="font-medium">{e.userName}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{e.promotionName}</span>
-                  </span>
-                  <span
-                    className={
-                      e.finalReturnPct >= 0 ? "shrink-0 text-gain tabular-nums" : "shrink-0 text-loss tabular-nums"
-                    }
-                  >
-                    {signedPct(e.finalReturnPct)}
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </section>
   );
 }

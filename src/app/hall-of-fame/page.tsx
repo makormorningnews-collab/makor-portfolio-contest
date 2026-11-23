@@ -22,7 +22,6 @@ export default async function HallOfFamePage() {
   const { entries, seasons, participations } = await getHallOfFame(session.user.id);
   const record = entries[0] ?? null;
   const worstRecord = entries.length > 0 ? entries[entries.length - 1] : null;
-  const worstEntries = [...entries].reverse();
 
   return (
     <>
@@ -102,38 +101,6 @@ export default async function HallOfFamePage() {
           </section>
         )}
 
-        {entries.length > 0 && (
-          <section className="mt-8">
-            <h2 className="text-lg font-semibold">Meilleures performances de tous les temps</h2>
-            <Card className="mt-4">
-              <CardContent className="flex flex-col gap-1.5 pt-6">
-                {entries.map((e, i) => (
-                  <div
-                    key={`${e.promotionId}-${e.finalRank}`}
-                    className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-0"
-                  >
-                    <span className="w-6 shrink-0 text-sm tabular-nums text-muted-foreground">{i + 1}</span>
-                    <UserAvatar name={e.userName} avatarUrl={e.avatarUrl} size="sm" className="shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">
-                      <span className="font-medium">{e.userName}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{e.promotionName}</span>
-                    </span>
-                    <span
-                      className={
-                        e.finalReturnPct >= 0
-                          ? "shrink-0 text-gain tabular-nums"
-                          : "shrink-0 text-loss tabular-nums"
-                      }
-                    >
-                      {signedPct(e.finalReturnPct)}
-                    </span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </section>
-        )}
-
         {participations.length > 0 && (
           <section className="mt-8">
             <h2 className="text-lg font-semibold">Participations</h2>
@@ -147,7 +114,7 @@ export default async function HallOfFamePage() {
           </section>
         )}
 
-        <HallOfShameSection worstRecord={worstRecord} worstEntries={worstEntries} />
+        <HallOfShameSection worstRecord={worstRecord} />
       </div>
     </>
   );
