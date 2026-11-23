@@ -193,15 +193,26 @@ export function RulesDocument({
           Au lancement du concours, une <strong className="text-foreground">fenêtre de constitution</strong>{" "}
           s&apos;ouvre automatiquement pour une durée de{" "}
           <strong className="text-foreground">{formatDurationHours(rules.initializationWindowHours)}</strong>.{" "}
-          Pendant cette fenêtre, les achats et renforcements de positions sont{" "}
-          <strong className="text-foreground">illimités</strong>{" "}
-          — l&apos;objectif est d&apos;investir l&apos;intégralité du capital initial avant sa fermeture.
+          Elle sert à choisir vos lignes et à investir l&apos;intégralité du capital initial avant sa fermeture.
+          Aucun quota de changements ne s&apos;y applique, mais les achats et les ventes n&apos;y sont{" "}
+          <strong className="text-foreground">pas illimités</strong> :
         </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong className="text-foreground">Ventes : interdites.</strong> Le trading intraday n&apos;est pas
+            autorisé pendant la constitution — aucune vente, partielle ou totale, n&apos;est possible. Une ligne
+            achetée ne peut être ni revendue ni remplacée avant la prochaine session de changement.
+          </li>
+          <li>
+            <strong className="text-foreground">Achats : limités.</strong> Vous pouvez ouvrir au maximum{" "}
+            {rules.maxPositions} lignes et renforcer celles déjà achetées, dans la limite de votre capital
+            disponible et des tailles de position (entre {currencyFormatter.format(rules.minPositionSize)} et{" "}
+            {currencyFormatter.format(rules.maxPositionSize)} par ligne).
+          </li>
+        </ul>
         <InfoBox variant="warning">
-          <strong className="text-foreground">Le trading intraday est interdit pendant la constitution.</strong>{" "}
-          Aucune vente (partielle ou totale) n&apos;est possible pendant cette fenêtre : une fois vos{" "}
-          {rules.maxPositions} lignes choisies, vous ne pouvez plus faire marche arrière jusqu&apos;à la prochaine
-          session de changement. Choisissez donc chaque ligne avec soin.
+          Une fois vos lignes choisies, vous ne pouvez plus faire marche arrière jusqu&apos;à la prochaine session de
+          changement. Choisissez donc chaque ligne avec soin.
         </InfoBox>
         {initializationSession && (
           <InfoBox>
